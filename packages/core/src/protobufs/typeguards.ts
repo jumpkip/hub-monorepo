@@ -192,6 +192,15 @@ export const isStorageRentOnChainEvent = (
   );
 };
 
+export const isTierPurchaseOnChainEvent = (
+  event: onChainEventProtobufs.OnChainEvent,
+): event is types.TierPurchaseOnChainEvent => {
+  return (
+    event.type === onChainEventProtobufs.OnChainEventType.EVENT_TYPE_TIER_PURCHASE &&
+    typeof event.tierPurchaseEventBody !== "undefined"
+  );
+};
+
 /** Hub event typeguards */
 
 export const isMergeMessageHubEvent = (event: hubEventProtobufs.HubEvent): event is types.MergeMessageHubEvent => {
@@ -218,6 +227,14 @@ export const isPruneMessageHubEvent = (event: hubEventProtobufs.HubEvent): event
   );
 };
 
+export const isMergeFailureHubEvent = (event: hubEventProtobufs.HubEvent): event is types.MergeFailureHubEvent => {
+  return (
+    event.type === hubEventProtobufs.HubEventType.MERGE_FAILURE &&
+    typeof event.mergeFailure !== "undefined" &&
+    typeof event.mergeFailure.message !== "undefined"
+  );
+};
+
 export const isMergeOnChainHubEvent = (event: hubEventProtobufs.HubEvent): event is types.MergeOnChainEventHubEvent => {
   return (
     event.type === hubEventProtobufs.HubEventType.MERGE_ON_CHAIN_EVENT &&
@@ -234,5 +251,11 @@ export const isMergeUsernameProofHubEvent = (
     typeof event.mergeUsernameProofBody !== "undefined" &&
     (typeof event.mergeUsernameProofBody.usernameProof !== "undefined" ||
       typeof event.mergeUsernameProofBody.deletedUsernameProof !== "undefined")
+  );
+};
+
+export const isBlockConfirmedHubEvent = (event: hubEventProtobufs.HubEvent): event is types.BlockConfirmedHubEvent => {
+  return (
+    event.type === hubEventProtobufs.HubEventType.BLOCK_CONFIRMED && typeof event.blockConfirmedBody !== "undefined"
   );
 };

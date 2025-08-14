@@ -8,9 +8,10 @@ import { Factories } from "./factories";
 import { fromFarcasterTime, getFarcasterTime } from "./time";
 import * as validations from "./validations";
 import { makeVerificationAddressClaim } from "./verifications";
-import { UserDataType, UserNameType } from "@farcaster/hub-nodejs";
+import { CastAddBody, makeCastAdd, makeCastAddData, UserDataType, UserNameType } from "@farcaster/hub-nodejs";
 import { defaultL1PublicClient } from "./eth/clients";
 import { jest } from "@jest/globals";
+import { assert } from "console";
 
 const signer = Factories.Ed25519Signer.build();
 const ethSigner = Factories.Eip712Signer.build();
@@ -122,8 +123,8 @@ describe("validateENSname", () => {
     expect(validations.validateEnsName(ensName)).toEqual(ok(ensName));
   });
 
-  test("fails when greater than 20 characters", () => {
-    const ensName = faker.random.alpha(17).concat(".eth");
+  test("fails when greater than 25 characters", () => {
+    const ensName = faker.random.alpha(22).concat(".eth");
     expect(validations.validateEnsName(ensName)).toEqual(
       err(new HubError("bad_request.validation_failure", `ensName "${ensName}" > 20 characters`)),
     );
@@ -327,7 +328,7 @@ describe("validateCastAddBody", () => {
     test("fails with unrecognized type", () => {
       const body = Factories.CastAddBody.build({
         text: "Hello",
-        type: 2,
+        type: 3,
       });
       expect(validations.validateCastAddBody(body)).toEqual(
         err(new HubError("bad_request.validation_failure", "invalid cast type")),
@@ -435,11 +436,17 @@ describe("validateCastAddBody", () => {
       hubErrorMessage = "text > 320 bytes";
     });
 
-    test("with more than 2 embeds", () => {
+    test("with more than 4 embeds", () => {
       body = Factories.CastAddBody.build({
-        embeds: [Factories.Embed.build(), Factories.Embed.build(), Factories.Embed.build()],
+        embeds: [
+          Factories.Embed.build(),
+          Factories.Embed.build(),
+          Factories.Embed.build(),
+          Factories.Embed.build(),
+          Factories.Embed.build(),
+        ],
       });
-      hubErrorMessage = "embeds > 2";
+      hubErrorMessage = "embeds > 4";
     });
 
     test("with an empty embed url string", () => {
@@ -1042,6 +1049,50 @@ describe("validateUserDataAddBody", () => {
     expect(validations.validateUserDataAddBody(body)).toEqual(ok(body));
   });
 
+  test("succeeds for base names", async () => {
+    const body = Factories.UserDataBody.build({
+      type: UserDataType.USERNAME,
+      value: "averylongname.base.eth",
+    });
+    expect(validations.validateUserDataAddBody(body)).toEqual(ok(body));
+  });
+
+  test("succeeds for primary address", async () => {
+    const eth = Factories.UserDataBody.build({
+      type: UserDataType.USER_DATA_PRIMARY_ADDRESS_ETHEREUM,
+      value: "0xdadB0d80178819F2319190D340ce9A924f783711",
+    });
+    expect(validations.validateUserDataAddBody(eth)).toEqual(ok(eth));
+    const sol = Factories.UserDataBody.build({
+      type: UserDataType.USER_DATA_PRIMARY_ADDRESS_SOLANA,
+      value: "8TPWakvWw4xQbk7uAYdNjZiDKKHgv9GE5GebzsbtUaHr",
+    });
+    expect(validations.validateUserDataAddBody(sol)).toEqual(ok(sol));
+    const empty = Factories.UserDataBody.build({
+      type: UserDataType.USER_DATA_PRIMARY_ADDRESS_ETHEREUM,
+      value: "",
+    });
+    expect(validations.validateUserDataAddBody(empty)).toEqual(ok(empty));
+
+    const invalidEth = Factories.UserDataBody.build({
+      type: UserDataType.USER_DATA_PRIMARY_ADDRESS_ETHEREUM,
+      value: "0xdadB0d80178819F2319190D340ce9A924f783711123",
+    });
+    let result = validations.validateUserDataAddBody(invalidEth);
+    expect(result._unsafeUnwrapErr()).toEqual(
+      new HubError("bad_request.validation_failure", "invalid length for eth address"),
+    );
+
+    const invalidSol = Factories.UserDataBody.build({
+      type: UserDataType.USER_DATA_PRIMARY_ADDRESS_SOLANA,
+      value: "8TPWakvWw4xQbk7uAYdNjZiDKKHgv9GE5GebzsbtUaHrasd",
+    });
+    result = validations.validateUserDataAddBody(invalidSol);
+    expect(result._unsafeUnwrapErr()).toEqual(
+      new HubError("bad_request.validation_failure", "invalid length for sol address"),
+    );
+  });
+
   test("succeeds for empty location", async () => {
     const body = Factories.UserDataBody.build({
       type: UserDataType.LOCATION,
@@ -1303,6 +1354,32 @@ describe("validateUsernameProof", () => {
     const result = await validations.validateUsernameProofBody(proof.data.usernameProofBody, proof.data);
     expect(result.isOk()).toBeTruthy();
   });
+  test("succeeds for basenames", async () => {
+    const proof = await Factories.UsernameProofMessage.create({
+      data: {
+        usernameProofBody: {
+          name: utf8StringToBytes("alongname.base.eth")._unsafeUnwrap(),
+          type: UserNameType.USERNAME_TYPE_BASENAME,
+        },
+      },
+    });
+    const result = validations.validateUsernameProofBody(proof.data.usernameProofBody, proof.data);
+    expect(result.isOk()).toBeTruthy();
+  });
+  test("fails for non base name", async () => {
+    const proof = await Factories.UsernameProofMessage.create({
+      data: {
+        usernameProofBody: {
+          name: utf8StringToBytes("alongname.esab.eth")._unsafeUnwrap(),
+          type: UserNameType.USERNAME_TYPE_BASENAME,
+        },
+      },
+    });
+    const result = validations.validateUsernameProofBody(proof.data.usernameProofBody, proof.data);
+    expect(result._unsafeUnwrapErr()).toEqual(
+      new HubError("bad_request.validation_failure", 'ensName "alongname.esab.eth" unsupported subdomain'),
+    );
+  });
 });
 
 describe("validateMessage", () => {
@@ -1397,6 +1474,19 @@ describe("validateMessage", () => {
 
     const result = await validations.validateMessage(message);
     expect(result).toEqual(err(new HubError("bad_request.validation_failure", "invalid signature")));
+  });
+
+  test("passes for 10k cast", async () => {
+    const message = (
+      await makeCastAdd(
+        CastAddBody.create({ text: "z".repeat(10_000), type: CastType.TEN_K_CAST }),
+        { fid: Factories.Fid.build(), network: Factories.FarcasterNetwork.build() },
+        Factories.Ed25519Signer.build(),
+      )
+    )._unsafeUnwrap();
+    expect(message.dataBytes !== undefined).toBeTruthy();
+    const result = await validations.validateMessage(message);
+    expect(result.isOk()).toBeTruthy();
   });
 });
 

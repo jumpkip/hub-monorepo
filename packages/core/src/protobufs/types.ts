@@ -146,6 +146,11 @@ export type StorageRentOnChainEvent = onchainEventProtobufs.OnChainEvent & {
   storageRentEventBody: onchainEventProtobufs.StorageRentEventBody;
 };
 
+export type TierPurchaseOnChainEvent = onchainEventProtobufs.OnChainEvent & {
+  type: onchainEventProtobufs.OnChainEventType.EVENT_TYPE_TIER_PURCHASE;
+  tierPurchaseEventBody: onchainEventProtobufs.TierPurchaseBody;
+};
+
 /** Hub event types */
 
 export type MergeMessageHubEvent = hubEventProtobufs.HubEvent & {
@@ -179,4 +184,14 @@ export type MergeOnChainEventHubEvent = hubEventProtobufs.HubEvent & {
 export type MergeUsernameProofHubEvent = hubEventProtobufs.HubEvent & {
   type: hubEventProtobufs.HubEventType.MERGE_USERNAME_PROOF;
   mergeUsernameProofBody: hubEventProtobufs.MergeUserNameProofBody;
+};
+
+export type MergeFailureHubEvent = hubEventProtobufs.HubEvent & {
+  type: hubEventProtobufs.HubEventType.MERGE_FAILURE;
+  mergeFailure: hubEventProtobufs.MergeFailureBody;
+};
+
+export type BlockConfirmedHubEvent = hubEventProtobufs.HubEvent & {
+  type: hubEventProtobufs.HubEventType.BLOCK_CONFIRMED;
+  blockConfirmedBody: hubEventProtobufs.BlockConfirmedBody;
 };

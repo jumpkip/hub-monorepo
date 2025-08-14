@@ -1,5 +1,79 @@
 # @farcaster/hub-web
 
+## 0.11.4
+
+### Patch Changes
+
+- c37a6370: chore: pull in updated Snapchain protos
+- Updated dependencies [83f4721a]
+- Updated dependencies [c37a6370]
+  - @farcaster/core@0.18.5
+
+## 0.11.3
+
+### Patch Changes
+
+- feat: update protos to support new storage unit type in snapchain v0.4.0
+- Updated dependencies
+  - @farcaster/core@0.18.3
+
+## 0.11.2
+
+### Patch Changes
+
+- 74149586: fix: Add console example and bump protos
+- Updated dependencies [74149586]
+  - @farcaster/core@0.18.2
+
+## 0.11.1
+
+### Patch Changes
+
+- 722acc86: feat: set up monitoring for event stream based on snapchain block numbers
+- Updated dependencies [722acc86]
+  - @farcaster/core@0.18.1
+
+## 0.11.0
+
+### Minor Changes
+
+- 56cf1302: chore: switch to generating client libraries off snapchain protos
+
+### Patch Changes
+
+- 56cf1302: chore: add typeguards for BlockConfirmed event
+- Updated dependencies [56cf1302]
+- Updated dependencies [56cf1302]
+  - @farcaster/core@0.18.0
+
+## 0.10.0
+
+### Minor Changes
+
+- 6307171a: feat: Support snapchain 0.3 protocol features: pro, basenames and primary address
+
+### Patch Changes
+
+- Updated dependencies [6307171a]
+  - @farcaster/core@0.17.0
+
+## 0.9.7
+
+### Patch Changes
+
+- e26f69bf: feat: Add snapchain fields to hub event
+- e26f69bf: fix: Populate data and dataBytes for better compatibility
+- Updated dependencies [e26f69bf]
+- Updated dependencies [e26f69bf]
+  - @farcaster/core@0.16.3
+
+## 0.9.6
+
+### Patch Changes
+
+- Updated dependencies [846336ea]
+  - @farcaster/core@0.16.0
+
 ## 0.9.5
 
 ### Patch Changes

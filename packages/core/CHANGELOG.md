@@ -1,5 +1,96 @@
 # @farcaster/core
 
+## 0.18.5
+
+### Patch Changes
+
+- 83f4721a: fix: update dataBytes length check for 10k casts
+- c37a6370: chore: pull in updated Snapchain protos
+
+## 0.18.4
+
+### Patch Changes
+
+- b4e3487b: fix: correctly determine storage unit type
+
+## 0.18.3
+
+### Patch Changes
+
+- feat: update protos to support new storage unit type in snapchain v0.4.0
+
+## 0.18.2
+
+### Patch Changes
+
+- 74149586: fix: Add console example and bump protos
+
+## 0.18.1
+
+### Patch Changes
+
+- 722acc86: feat: set up monitoring for event stream based on snapchain block numbers
+
+## 0.18.0
+
+### Minor Changes
+
+- 56cf1302: chore: switch to generating client libraries off snapchain protos
+
+### Patch Changes
+
+- 56cf1302: chore: add typeguards for BlockConfirmed event
+
+## 0.17.1
+
+### Patch Changes
+
+- 1290c93c: fix: Fix event timestamp calculation for snapchain
+- 05733a44: fix: add typeguards for TierPurchase onchain event
+
+## 0.17.0
+
+### Minor Changes
+
+- 6307171a: feat: Support snapchain 0.3 protocol features: pro, basenames and primary address
+
+## 0.16.5
+
+### Patch Changes
+
+- 7e742a8d: chore: bring protos to parity with Snapchain for client library
+
+## 0.16.4
+
+### Patch Changes
+
+- 7ec9ad4b: fix: Update isMergeFailureHubEvent type guard to return correct type
+
+## 0.16.3
+
+### Patch Changes
+
+- e26f69bf: feat: Add snapchain fields to hub event
+- e26f69bf: fix: Populate data and dataBytes for better compatibility
+
+## 0.16.2
+
+### Patch Changes
+
+- a4070feb: fix: support removals for social usernames, already supported upstream
+
+## 0.16.1
+
+### Patch Changes
+
+- 7079230a: fix: support removals for social usernames, already supported upstream
+
+## 0.16.0
+
+### Minor Changes
+
+- 846336ea: feat: Update packages to support snapchain
+
 ## 0.15.6
 
 ### Patch Changes

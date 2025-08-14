@@ -1,6 +1,6 @@
 import {
   ClientReadableStream,
-  extractEventTimestamp,
+  extractTimestampFromEvent,
   HubEvent,
   HubEventType,
   HubRpcClient,
@@ -59,24 +59,21 @@ export class BaseHubSubscriber extends HubSubscriber {
   protected eventTypes: HubEventType[];
 
   private stream: ClientReadableStream<HubEvent> | null = null;
-  private totalShards: number | undefined;
-  private shardIndex: number | undefined;
+  private shardIndex: number;
   private connectionTimeout: number; // milliseconds
 
   constructor(
     label: string,
     hubClient: HubRpcClient,
+    shardIndex: number,
     log: Logger,
     eventTypes?: HubEventType[],
-    totalShards?: number,
-    shardIndex?: number,
     connectionTimeout = 30000,
   ) {
     super();
     this.label = label;
     this.hubClient = hubClient;
     this.log = log;
-    this.totalShards = totalShards;
     this.shardIndex = shardIndex;
     this.eventTypes = eventTypes || DEFAULT_EVENT_TYPES;
     this.connectionTimeout = connectionTimeout;
@@ -115,12 +112,11 @@ export class BaseHubSubscriber extends HubSubscriber {
     if (fromId) {
       this.log.info(`HubSubscriber ${this.label} Found last hub event ID: ${fromId}`);
     } else {
-      this.log.warn("No last hub event ID found, starting from beginning");
+      this.log.warn("No last hub event ID found, starting from the beginning");
     }
 
     const subscribeParams = {
       eventTypes: this.eventTypes,
-      totalShards: this.totalShards,
       shardIndex: this.shardIndex,
       fromId,
     };
@@ -131,7 +127,7 @@ export class BaseHubSubscriber extends HubSubscriber {
         this.log.info(
           `HubSubscriber ${this.label} subscribed to hub events (types ${JSON.stringify(this.eventTypes)}, shard: ${
             this.shardIndex
-          }/${this.totalShards})`,
+          })`,
         );
         this.stream = stream;
         this.stopped = false;
@@ -176,13 +172,16 @@ export class BaseHubSubscriber extends HubSubscriber {
         clearTimeout(cancel);
         // biome-ignore lint/suspicious/noExplicitAny: error catching
       } catch (e: any) {
+        this.log.info(
+          `Hub event stream processing halted unexpectedly: ${e.message}. HubSubscriber will attempt ${this.label} restarting hub event stream in 5 seconds...`,
+        );
+        await sleep(5_000);
+        // Do this after the sleep so that stopped state accurately reflects whether we'll retry.
         this.emit("onError", e, this.stopped);
+        // It's important to check if the subscription is stopped after sleeping because in cases where the server is unresponsive, we end up in this catch block and the stream is closed some time shortly after. If we attempt to retry anyway then we end up raising due to the stream being closed.
         if (this.stopped) {
-          this.log.info(`Hub event stream processing stopped: ${e.message}`);
+          this.log.info(`Hub event stream processing stopped, aborting retry: ${e.message}`);
         } else {
-          this.log.info(`Hub event stream processing halted unexpectedly: ${e.message}`);
-          this.log.info(`HubSubscriber ${this.label} restarting hub event stream in 5 seconds...`);
-          await sleep(5_000);
           void this.start();
         }
       }
@@ -217,17 +216,16 @@ export class EventStreamHubSubscriber extends BaseHubSubscriber {
   constructor(
     label: string,
     hubClient: HubClient,
+    shardIndex: number,
     eventStream: EventStreamConnection,
     redis: RedisClient,
     shardKey: string,
     log: Logger,
     eventTypes?: HubEventType[],
-    totalShards?: number,
-    shardIndex?: number,
     connectionTimeout?: number,
     options?: EventStreamHubSubscriberOptions,
   ) {
-    super(label, hubClient.client, log, eventTypes, totalShards, shardIndex, connectionTimeout);
+    super(label, hubClient.client, shardIndex, log, eventTypes, connectionTimeout);
     this.eventStream = eventStream;
     this.redis = redis;
     this.streamKey = `hub:${hubClient.host}:evt:msg:${shardKey}`;
@@ -291,7 +289,7 @@ export class EventStreamHubSubscriber extends BaseHubSubscriber {
       const processTime = Date.now() - startTime;
 
       if (events[0]) {
-        const startEventTimestamp = extractEventTimestamp(events[0].id);
+        const startEventTimestamp = extractTimestampFromEvent(events[0]);
         statsd.gauge("hub.event.subscriber.last_batch_earliest_event_timestamp", startEventTimestamp, {
           source: this.shardKey,
           hub: this.hub,

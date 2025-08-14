@@ -1,5 +1,120 @@
 # @farcaster/hub-shuttle
 
+## 0.9.2
+
+### Patch Changes
+
+- e3dc87e5: fix: update where we emit errors on hub subscriber disconnects
+
+## 0.9.1
+
+### Patch Changes
+
+- 5460d914: fix: handle retries on server-side termination properly in HubSubscriber
+
+## 0.9.0
+
+### Minor Changes
+
+- 83a95868: fix: make shard id required for the hub subscriber
+- Updated dependencies [74149586]
+  - @farcaster/hub-nodejs@0.15.2
+
+## 0.8.2
+
+### Patch Changes
+
+- 8877a5f7: chore: add logging for event stream monitor
+
+## 0.8.1
+
+### Patch Changes
+
+- 54dd939c: fix: revert changes to the event stream to process events in order
+
+## 0.8.0
+
+### Minor Changes
+
+- 4a2d8e29: feat: process events from stream in order
+
+## 0.7.4
+
+### Patch Changes
+
+- 373d3fe8: fix: use shard id from event in stream monitoring
+
+## 0.7.3
+
+### Patch Changes
+
+- 41b1f354: fix: only maintain counts for expected events in event stream monitoring
+
+## 0.7.2
+
+### Patch Changes
+
+- 3cd6a779: fix: add custom redis key prefix for monitoring
+
+## 0.7.1
+
+### Patch Changes
+
+- 77d520af: fix: track event stream stats by host
+- 722acc86: feat: set up monitoring for event stream based on snapchain block numbers
+- Updated dependencies [722acc86]
+  - @farcaster/hub-nodejs@0.15.1
+
+## 0.7.0
+
+### Minor Changes
+
+- 56cf1302: chore: switch to generating client libraries off snapchain protos
+
+### Patch Changes
+
+- 56cf1302: chore: add typeguards for BlockConfirmed event
+- Updated dependencies [56cf1302]
+- Updated dependencies [56cf1302]
+  - @farcaster/hub-nodejs@0.15.0
+
+## 0.6.18
+
+### Patch Changes
+
+- 1af3e7de: fix: Shuttle should respect validate messages flag everywhere
+
+## 0.6.17
+
+### Patch Changes
+
+- 1290c93c: fix: Fix event timestamp calculation for snapchain
+  - @farcaster/hub-nodejs@0.14.1
+
+## 0.6.16
+
+### Patch Changes
+
+- Updated dependencies [6307171a]
+  - @farcaster/hub-nodejs@0.14.0
+
+## 0.6.15
+
+### Patch Changes
+
+- e26f69bf: feat: Add snapchain fields to hub event
+- e26f69bf: fix: Populate data and dataBytes for better compatibility
+- Updated dependencies [e26f69bf]
+- Updated dependencies [e26f69bf]
+  - @farcaster/hub-nodejs@0.13.4
+
+## 0.6.14
+
+### Patch Changes
+
+- Updated dependencies [846336ea]
+  - @farcaster/hub-nodejs@0.13.0
+
 ## 0.6.13
 
 ### Patch Changes

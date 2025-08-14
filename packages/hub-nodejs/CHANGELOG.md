@@ -1,5 +1,132 @@
 # @farcaster/hub-nodejs
 
+## 0.15.5
+
+### Patch Changes
+
+- c37a6370: chore: pull in updated Snapchain protos
+- Updated dependencies [83f4721a]
+- Updated dependencies [c37a6370]
+  - @farcaster/core@0.18.5
+
+## 0.15.4
+
+### Patch Changes
+
+- Updated dependencies [b4e3487b]
+  - @farcaster/core@0.18.4
+
+## 0.15.3
+
+### Patch Changes
+
+- feat: update protos to support new storage unit type in snapchain v0.4.0
+- Updated dependencies
+  - @farcaster/core@0.18.3
+
+## 0.15.2
+
+### Patch Changes
+
+- 74149586: fix: Add console example and bump protos
+- Updated dependencies [74149586]
+  - @farcaster/core@0.18.2
+
+## 0.15.1
+
+### Patch Changes
+
+- 722acc86: feat: set up monitoring for event stream based on snapchain block numbers
+- Updated dependencies [722acc86]
+  - @farcaster/core@0.18.1
+
+## 0.15.0
+
+### Minor Changes
+
+- 56cf1302: chore: switch to generating client libraries off snapchain protos
+
+### Patch Changes
+
+- 56cf1302: chore: add typeguards for BlockConfirmed event
+- Updated dependencies [56cf1302]
+- Updated dependencies [56cf1302]
+  - @farcaster/core@0.18.0
+
+## 0.14.1
+
+### Patch Changes
+
+- Updated dependencies [1290c93c]
+- Updated dependencies [05733a44]
+  - @farcaster/core@0.17.1
+
+## 0.14.0
+
+### Minor Changes
+
+- 6307171a: feat: Support snapchain 0.3 protocol features: pro, basenames and primary address
+
+### Patch Changes
+
+- Updated dependencies [6307171a]
+  - @farcaster/core@0.17.0
+
+## 0.13.6
+
+### Patch Changes
+
+- Updated dependencies [7e742a8d]
+  - @farcaster/core@0.16.5
+
+## 0.13.5
+
+### Patch Changes
+
+- Updated dependencies [7ec9ad4b]
+  - @farcaster/core@0.16.4
+
+## 0.13.4
+
+### Patch Changes
+
+- e26f69bf: feat: Add snapchain fields to hub event
+- e26f69bf: fix: Populate data and dataBytes for better compatibility
+- Updated dependencies [e26f69bf]
+- Updated dependencies [e26f69bf]
+  - @farcaster/core@0.16.3
+
+## 0.13.3
+
+### Patch Changes
+
+- Updated dependencies [a4070feb]
+  - @farcaster/core@0.16.2
+
+## 0.13.2
+
+### Patch Changes
+
+- Updated dependencies [7079230a]
+  - @farcaster/core@0.16.1
+
+## 0.13.1
+
+### Patch Changes
+
+- b39166ec: fix: Ensure snapchain error codes are passed through
+
+## 0.13.0
+
+### Minor Changes
+
+- 846336ea: feat: Update packages to support snapchain
+
+### Patch Changes
+
+- Updated dependencies [846336ea]
+  - @farcaster/core@0.16.0
+
 ## 0.12.7
 
 ### Patch Changes

@@ -1,8 +1,14 @@
-import { Cluster, ClusterOptions, Redis, RedisOptions, ReplyError } from "ioredis";
-import { getHubEventCacheKey, HubClient } from "./hub";
+import { Cluster, Redis, ReplyError } from "ioredis";
+import { HubClient } from "./hub";
 import { inBatchesOf, sleep } from "../utils";
 import { statsd } from "../statsd";
-import { extractEventTimestamp, HubEvent } from "@farcaster/hub-nodejs";
+import {
+  BlockConfirmedHubEvent,
+  extractTimestampFromEvent,
+  HubEvent,
+  HubEventType,
+  isBlockConfirmedHubEvent,
+} from "@farcaster/hub-nodejs";
 import { log } from "../log";
 import { pino } from "pino";
 import { ProcessResult } from "./index";
@@ -222,6 +228,150 @@ interface HubEventStreamConsumerEventsEmitter {
   onError: (hubEvent: HubEvent, error: Error) => void;
 }
 
+export class EventStreamMonitor {
+  private redis: Redis | Cluster;
+  private relevantEventTypes: HubEventType[];
+  private log: pino.Logger;
+  private shardKey: string; // Shard key should map to snapchain shards
+  private host: string;
+  private redisPrefix: string;
+
+  constructor(
+    redis: Redis | Cluster,
+    relevantEventTypes: HubEventType[],
+    redisPrefix: string,
+    shardKey: string,
+    host: string,
+    log: pino.Logger,
+  ) {
+    this.redis = redis;
+    this.relevantEventTypes = relevantEventTypes;
+    this.log = log.child({ class: "EventStreamMonitor" });
+    this.shardKey = shardKey;
+    this.host = host;
+    this.redisPrefix = redisPrefix;
+  }
+
+  public streamKey(shardId: number) {
+    return `${this.redisPrefix}:${this.host}:shard-${shardId}`;
+  }
+
+  public blockCountsKey(blockNumber: number, shardId: number, eventType: number) {
+    return `${this.streamKey(shardId)}:block-counts:${blockNumber}:${eventType}`;
+  }
+
+  public currentBlockNumberKey(shardId: number) {
+    return `${this.streamKey(shardId)}:current-block-number`;
+  }
+
+  public currentBlockTimestampKey(shardId: number) {
+    return `${this.streamKey(shardId)}:current-block-timestamp`;
+  }
+
+  public async setBlockCounts(event: BlockConfirmedHubEvent) {
+    for (const eventType of this.relevantEventTypes) {
+      const count = event.blockConfirmedBody.eventCountsByType[eventType];
+      if (count !== undefined) {
+        await this.redis.set(
+          this.blockCountsKey(event.blockConfirmedBody.blockNumber, event.shardIndex, eventType),
+          count,
+        );
+      }
+    }
+  }
+
+  public async blockCompleted(shardId: number, blockNumber: number) {
+    for (const eventType of this.relevantEventTypes) {
+      const key = this.blockCountsKey(blockNumber, shardId, eventType);
+      const count = await this.redis.get(key);
+      if (count !== null) {
+        // TODO(aditi): Eventually we will want to retry missed events
+        statsd.increment("hub.event.monitor.missed_events", Number(count), {
+          shard: shardId,
+          host: this.host,
+          type: eventType,
+        });
+        this.log.error({ blockNumber, eventType, numMissedEvents: count }, "Missed events for block");
+      }
+    }
+  }
+
+  public async onEventProcessed(event: HubEvent) {
+    const currentBlockNumber = await this.redis.get(this.currentBlockNumberKey(event.shardIndex));
+    statsd.gauge("hub.event.monitor.current_block", Number(currentBlockNumber ?? "0"), {
+      shard: event.shardIndex,
+      host: this.host,
+    });
+
+    const currentBlockTimestamp = await this.redis.get(this.currentBlockTimestampKey(event.shardIndex));
+    if (currentBlockTimestamp !== null) {
+      statsd.gauge("hub.event.monitor.event_delay", Date.now() - Number(currentBlockTimestamp), {
+        shard: event.shardIndex,
+        host: this.host,
+      });
+    }
+
+    if (isBlockConfirmedHubEvent(event)) {
+      if (currentBlockNumber !== null && event.blockNumber > Number(currentBlockNumber) + 1) {
+        // TODO(aditi): Eventually we'll want to retry here
+        statsd.increment("hub.event.monitor.missed_blocks", event.blockNumber - Number(currentBlockNumber), {
+          shard: event.shardIndex,
+          host: this.host,
+        });
+        this.log.error(
+          { lastBlock: currentBlockNumber, currentBlock: event.blockNumber, eventShardId: event.shardIndex },
+          "Skipped events in block range",
+        );
+      }
+
+      if (currentBlockNumber === null || event.blockNumber >= Number(currentBlockNumber)) {
+        if (currentBlockNumber !== null) {
+          await this.blockCompleted(event.shardIndex, Number(currentBlockNumber));
+        }
+        await this.setBlockCounts(event);
+        await this.redis.set(this.currentBlockNumberKey(event.shardIndex), event.blockNumber);
+        await this.redis.set(this.currentBlockTimestampKey(event.shardIndex), extractTimestampFromEvent(event));
+      }
+    }
+
+    if (event.blockNumber < Number(currentBlockNumber)) {
+      statsd.increment("hub.event.monitor.old_event", 1, {
+        shard: event.shardIndex,
+        type: event.type,
+        host: this.host,
+      });
+      this.log.info(
+        {
+          blockNumber: event.blockNumber,
+          eventId: event.id,
+          eventType: event.type,
+          eventTimestamp: extractTimestampFromEvent(event),
+          eventShardId: event.shardIndex,
+          currentBlockNumber: Number(currentBlockNumber),
+        },
+        "Received event for old block",
+      );
+    }
+
+    const key = this.blockCountsKey(event.blockNumber, event.shardIndex, event.type);
+    const new_count = await this.redis.decr(key);
+    if (new_count === 0) {
+      await this.redis.del(key);
+    } else if (new_count < 0) {
+      await this.redis.del(key);
+      this.log.info(
+        {
+          blockNumber: event.blockNumber,
+          eventType: event.type,
+          eventTimestamp: extractTimestampFromEvent(event),
+          eventShardId: event.shardIndex,
+        },
+        "Received unexpected event",
+      );
+    }
+  }
+}
+
 export class HubEventStreamConsumer extends TypedEmitter<HubEventStreamConsumerEventsEmitter> {
   public hub: HubClient;
   private stream: EventStreamConnection;
@@ -237,6 +387,7 @@ export class HubEventStreamConsumer extends TypedEmitter<HubEventStreamConsumerE
   private beforeProcess?: PreProcessHandler;
   private afterProcess?: PostProcessHandler;
   private interval?: NodeJS.Timeout;
+  private monitor?: EventStreamMonitor;
 
   constructor(
     hub: HubClient,
@@ -244,6 +395,7 @@ export class HubEventStreamConsumer extends TypedEmitter<HubEventStreamConsumerE
     shardKey: string,
     options: EventStreamConsumerOptions = {},
     logger: pino.Logger = log,
+    eventStreamMonitor?: EventStreamMonitor,
   ) {
     super();
     this.hub = hub;
@@ -258,6 +410,7 @@ export class HubEventStreamConsumer extends TypedEmitter<HubEventStreamConsumerE
     this.log = logger;
     this.beforeProcess = options.beforeProcess;
     this.afterProcess = options.afterProcess;
+    this.monitor = eventStreamMonitor;
   }
 
   async start(onEvent: (event: HubEvent) => Promise<Result<ProcessResult, Error>>) {
@@ -351,6 +504,8 @@ export class HubEventStreamConsumer extends TypedEmitter<HubEventStreamConsumerE
                   }
 
                   eventIdsProcessed.push(streamId);
+                  await this.monitor?.onEventProcessed(hubEvt);
+
                   if (result.value.skipped) {
                     statsd.increment("hub.event.stream.skipped", 1, {
                       hub: this.hub.host,
@@ -359,7 +514,7 @@ export class HubEventStreamConsumer extends TypedEmitter<HubEventStreamConsumerE
                   }
 
                   if (!result.value.skipped) {
-                    const e2eTime = Date.now() - extractEventTimestamp(hubEvent.id);
+                    const e2eTime = Date.now() - extractTimestampFromEvent(hubEvent);
                     statsd.timing("hub.event.stream.e2e_time", e2eTime, {
                       hub: this.hub.host,
                       source: this.shardKey,
@@ -391,7 +546,6 @@ export class HubEventStreamConsumer extends TypedEmitter<HubEventStreamConsumerE
             });
 
             if (this.afterProcess) {
-              const eventsProcessed = eventChunk.filter(([id, ,]) => !eventIdsSkipped.includes(id));
               const hubEventsProcessed = eventChunk.map(([_id, evt, _evtBytes]) => evt);
               const eventsBytesProcessed = eventChunk.map(([_id, _evt, evtBytes]) => evtBytes);
               await this.afterProcess.call(this, hubEventsProcessed, eventsBytesProcessed);
@@ -464,8 +618,9 @@ export class HubEventStreamConsumer extends TypedEmitter<HubEventStreamConsumerE
               if (result.isErr()) throw result.error;
 
               eventIdsProcessed.push(streamEvent.id);
+              await this.monitor?.onEventProcessed(hubEvent);
 
-              statsd.timing("hub.event.stream.e2e_time", Date.now() - extractEventTimestamp(hubEvent.id), {
+              statsd.timing("hub.event.stream.e2e_time", Date.now() - extractTimestampFromEvent(hubEvent), {
                 hub: this.hub.host,
                 source: this.shardKey,
                 hubEventType: hubEvent.type.toString(),

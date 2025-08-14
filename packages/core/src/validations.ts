@@ -22,7 +22,7 @@ export const HEX_REGEX = /^(0x)?[0-9A-Fa-f]+$/;
 export const TWITTER_REGEX = /^[a-z0-9_]{0,15}$/;
 export const GITHUB_REGEX = /^[a-z\d](?:[a-z\d]|-(?!-)){0,38}$/i;
 
-export const USERNAME_MAX_LENGTH = 20;
+export const USERNAME_MAX_LENGTH = 25;
 
 export const EMBEDS_V1_CUTOFF = 73612800; // 5/3/23 00:00 UTC
 
@@ -292,10 +292,11 @@ export const validateMessage = async (
   publicClients: PublicClients = defaultPublicClients,
 ): HubAsyncResult<protobufs.Message> => {
   // 1. Check the message data
-  const data = message.data;
-  if (!data) {
+  if (!message.data && !message.dataBytes) {
     return err(new HubError("bad_request.validation_failure", "data is missing"));
   }
+  // biome-ignore lint/style/noNonNullAssertion: data or dataBytes must be set or it will be caught above
+  const data = message.data || protobufs.MessageData.decode(Buffer.from(message.dataBytes!));
   const validData = await validateMessageData(data, publicClients);
   if (validData.isErr()) {
     return err(validData.error);
@@ -313,7 +314,9 @@ export const validateMessage = async (
 
   // 2. If the data_bytes are set, we'll validate signature against that
   if (message.dataBytes && message.dataBytes.length > 0) {
-    if (message.dataBytes.length > 2048) {
+    // This is the max size allowed for a message (link compact) on Snapchain.
+    // On Snapchain, we validate dataBytes specifically by message type and in the client side validations we validate text size for different cast types.
+    if (message.dataBytes.length > 65_536) {
       return err(new HubError("bad_request.validation_failure", "dataBytes > 2048 bytes"));
     }
     // 2a. Use the databytes as the hash to check the signature against
@@ -598,12 +601,20 @@ export const validateCastAddBody = (
     return err(new HubError("bad_request.validation_failure", "text too short for long cast"));
   }
 
-  if (body.type !== CastType.CAST && body.type !== CastType.LONG_CAST) {
+  if (body.type === CastType.TEN_K_CAST && textBytes.length > 10_000) {
+    return err(new HubError("bad_request.validation_failure", "text > 10,000 bytes for 10k cast"));
+  }
+
+  if (body.type === CastType.TEN_K_CAST && textBytes.length <= 1024) {
+    return err(new HubError("bad_request.validation_failure", "text too short for 10k cast"));
+  }
+
+  if (body.type !== CastType.CAST && body.type !== CastType.LONG_CAST && body.type !== CastType.TEN_K_CAST) {
     return err(new HubError("bad_request.validation_failure", "invalid cast type"));
   }
 
-  if (body.embeds.length > 2) {
-    return err(new HubError("bad_request.validation_failure", "embeds > 2"));
+  if (body.embeds.length > 4) {
+    return err(new HubError("bad_request.validation_failure", "embeds > 4"));
   }
 
   if (allowEmbedsDeprecated && body.embedsDeprecated.length > 2) {
@@ -891,7 +902,7 @@ export const validateUsernameProofBody = (
   data: protobufs.MessageData,
 ): HubResult<protobufs.UserNameProof> => {
   // Gossiped username proofs must only have an ENS type
-  if (body.type !== UserNameType.USERNAME_TYPE_ENS_L1) {
+  if (!(body.type === UserNameType.USERNAME_TYPE_ENS_L1 || body.type === UserNameType.USERNAME_TYPE_BASENAME)) {
     return err(new HubError("bad_request.validation_failure", `invalid username type: ${body.type}`));
   }
   const validateName = validateEnsName(body.name);
@@ -1025,16 +1036,42 @@ export const validateUserDataAddBody = (body: protobufs.UserDataBody): HubResult
       break;
     }
     case protobufs.UserDataType.TWITTER: {
-      const validatedTwitterUsername = validateTwitterUsername(value);
-      if (validatedTwitterUsername.isErr()) {
-        return err(validatedTwitterUsername.error);
+      // Users can remove their username
+      if (value !== "") {
+        const validatedTwitterUsername = validateTwitterUsername(value);
+        if (validatedTwitterUsername.isErr()) {
+          return err(validatedTwitterUsername.error);
+        }
       }
       break;
     }
     case protobufs.UserDataType.GITHUB: {
-      const validatedGithubUsername = validateGithubUsername(value);
-      if (validatedGithubUsername.isErr()) {
-        return err(validatedGithubUsername.error);
+      // Users can remove their username
+      if (value !== "") {
+        const validatedGithubUsername = validateGithubUsername(value);
+        if (validatedGithubUsername.isErr()) {
+          return err(validatedGithubUsername.error);
+        }
+      }
+      break;
+    }
+    case protobufs.UserDataType.USER_DATA_PRIMARY_ADDRESS_ETHEREUM: {
+      // Users can remove their primary address
+      if (valueBytes.length > 42) {
+        return err(new HubError("bad_request.validation_failure", "invalid length for eth address"));
+      }
+      break;
+    }
+    case protobufs.UserDataType.USER_DATA_PRIMARY_ADDRESS_SOLANA: {
+      // Users can remove their primary address
+      if (valueBytes.length > 44) {
+        return err(new HubError("bad_request.validation_failure", "invalid length for sol address"));
+      }
+      break;
+    }
+    case protobufs.UserDataType.BANNER: {
+      if (valueBytes.length > 256) {
+        return err(new HubError("bad_request.validation_failure", "banner value > 256"));
       }
       break;
     }
@@ -1109,7 +1146,11 @@ export const validateEnsName = <T extends string | Uint8Array>(ensNameP?: T | nu
   }
 
   const nameParts = ensName.split(".");
-  if (nameParts[0] === undefined || nameParts.length !== 2) {
+  if (nameParts[0] === undefined || !(nameParts.length === 2 || nameParts.length === 3)) {
+    return err(new HubError("bad_request.validation_failure", `ensName "${ensName}" unsupported subdomain`));
+  }
+
+  if (nameParts.length === 3 && nameParts[1] !== "base") {
     return err(new HubError("bad_request.validation_failure", `ensName "${ensName}" unsupported subdomain`));
   }
 
